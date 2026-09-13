@@ -19,7 +19,8 @@
     "proto": "docker run --rm -v $(pwd):/defs namely/protoc-all -f appearances.proto -l typescript -o src/proto --ts_opt enumsAsLiterals=true",
     "convert-sprites": "tsx scripts/convert-sprites.ts",
     "server": "tsx server/index.ts",
-    "server:dev": "tsx watch server/index.ts"
+    "server:dev": "tsx watch server/index.ts",
+    "clip-map": "tsx --max-old-space-size=12288 scripts/clip-map.ts"
   },
   "dependencies": {
     "express": "^5.2.1",
