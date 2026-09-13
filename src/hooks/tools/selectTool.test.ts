@@ -6,6 +6,11 @@ import type { SelectedItemInfo } from '../useSelection'
 import type { OtbmTile } from '../../lib/otbm'
 import { DEFAULT_SETTINGS } from '../../lib/EditorSettings'
 
+// Spawn zones are only selectable while their overlay is visible, and the
+// overlays are off by default. These tests arrange that precondition instead of
+// inheriting it, so a change to the defaults cannot quietly void them.
+const SPAWNS_VISIBLE = { showMonsterSpawns: true, showNpcSpawns: true }
+
 describe('selectTool', () => {
   describe('onDown — plain click', () => {
     it('selects top item on tile when clicking non-empty tile', () => {
@@ -319,7 +324,7 @@ describe('selectTool', () => {
   // ── findSelectableOnTile ─────────────────────────────────────────
 
   describe('findSelectableOnTile', () => {
-    const settings = { ...DEFAULT_SETTINGS }
+    const settings = { ...DEFAULT_SETTINGS, ...SPAWNS_VISIBLE }
 
     it('returns null for null tile', () => {
       expect(findSelectableOnTile(null, settings)).toBeNull()
@@ -407,7 +412,7 @@ describe('selectTool', () => {
       }
       const map = makeMapData([tile])
       const renderer = makeMockRenderer()
-      const { ctx } = makeToolContext({ mapData: map, renderer })
+      const { ctx } = makeToolContext({ settings: SPAWNS_VISIBLE, mapData: map, renderer })
       const { onDown } = createSelectHandlers(ctx)
 
       onDown({ x: 5, y: 5, z: 7 }, makePointerEvent())
@@ -451,7 +456,7 @@ describe('selectTool', () => {
       const tile: OtbmTile = { ...makeTile(5, 5, 7, []), spawnMonster: { radius: 3 } }
       const map = makeMapData([tile])
       const renderer = makeMockRenderer()
-      const { ctx } = makeToolContext({ mapData: map, renderer })
+      const { ctx } = makeToolContext({ settings: SPAWNS_VISIBLE, mapData: map, renderer })
       const { onDown } = createSelectHandlers(ctx)
 
       onDown({ x: 5, y: 5, z: 7 }, makePointerEvent())
@@ -550,7 +555,7 @@ describe('selectTool', () => {
       const tile: OtbmTile = { ...makeTile(5, 5, 7, []), spawnMonster: { radius: 3 } }
       const map = makeMapData([tile])
       const renderer = makeMockRenderer()
-      const { ctx, mutator } = makeToolContext({ mapData: map, renderer })
+      const { ctx, mutator } = makeToolContext({ settings: SPAWNS_VISIBLE, mapData: map, renderer })
       const { onDown, onMove, onUp } = createSelectHandlers(ctx)
 
       onDown({ x: 5, y: 5, z: 7 }, makePointerEvent())
@@ -567,7 +572,7 @@ describe('selectTool', () => {
       const tile: OtbmTile = { ...makeTile(5, 5, 7, []), spawnNpc: { radius: 2 } }
       const map = makeMapData([tile])
       const renderer = makeMockRenderer()
-      const { ctx } = makeToolContext({ mapData: map, renderer })
+      const { ctx } = makeToolContext({ settings: SPAWNS_VISIBLE, mapData: map, renderer })
       const { onDown, onMove, onUp } = createSelectHandlers(ctx)
 
       onDown({ x: 5, y: 5, z: 7 }, makePointerEvent())
@@ -585,7 +590,7 @@ describe('selectTool', () => {
       const tile: OtbmTile = { ...makeTile(5, 5, 7, []), spawnMonster: { radius: 3 } }
       const map = makeMapData([tile])
       const renderer = makeMockRenderer()
-      const { ctx, mutator } = makeToolContext({ mapData: map, renderer })
+      const { ctx, mutator } = makeToolContext({ settings: SPAWNS_VISIBLE, mapData: map, renderer })
       const { onDown, onUp } = createSelectHandlers(ctx)
 
       onDown({ x: 5, y: 5, z: 7 }, makePointerEvent())

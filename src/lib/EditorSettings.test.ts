@@ -24,6 +24,16 @@ describe('EditorSettings', () => {
       expect(settings.floorViewMode).toBe('single') // default
     })
 
+    it('leaves the spawn overlays off out of the box', () => {
+      // The markers tint whole gardens and hide the sprites underneath, so a
+      // first-time view of a map shows the map. The creature tool still turns
+      // them on while it is active, and VIEW has the toggles.
+      const settings = loadSettings()
+
+      expect(settings.showMonsterSpawns).toBe(false)
+      expect(settings.showNpcSpawns).toBe(false)
+    })
+
     it('returns a new object each time (no shared reference)', () => {
       const a = loadSettings()
       const b = loadSettings()
