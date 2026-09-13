@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings even on a Windows checkout: a CRLF
+# shebang makes the Docker image fail with "no such file or directory",
+# because the kernel looks for an interpreter literally named "/bin/sh\r".
+*.sh text eol=lf

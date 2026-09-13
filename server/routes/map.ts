@@ -11,6 +11,26 @@ function sanitizeFilename(name: string): string {
 export function createMapRouter(config: ServerConfig): Router {
   const router = Router()
 
+  // GET /health — liveness for an orchestrator's status probe.
+  // Reports what the server can actually see, not merely that Express answered:
+  // the SPA fallback returns 200 for every unknown path, so a probe of any
+  // other URL would report "up" with an unmounted or empty map directory.
+  router.get('/health', (_req, res) => {
+    // findOtbmFile throws when the map directory does not exist (an unmounted
+    // volume). That is a report-worthy state, not a crash: answer ok:false.
+    let otbmPath: string | null = null
+    try {
+      otbmPath = findOtbmFile(config.mapDir, config.mapFile)
+    } catch {
+      otbmPath = null
+    }
+    res.json({
+      ok: otbmPath !== null,
+      map: otbmPath ? path.basename(otbmPath) : null,
+      sidecars: discoverSidecars(config.mapDir).length,
+    })
+  })
+
   // GET /map — stream the OTBM file
   router.get('/map', (_req, res) => {
     const otbmPath = findOtbmFile(config.mapDir, config.mapFile)
