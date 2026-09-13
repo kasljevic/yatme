@@ -4,6 +4,8 @@ export interface ServerConfig {
   port: number
   mapDir: string
   mapFile?: string
+  /** Base URL of the launchpad tibia-houses service, if one is available. */
+  housesUrl?: string
 }
 
 const root = process.cwd()
@@ -17,5 +19,6 @@ export function loadConfig(): ServerConfig {
     port: parseInt(process.env['PORT'] ?? '8080', 10),
     mapDir: path.resolve(root, process.env['MAP_DIR']!),
     mapFile: process.env['MAP_FILE'] || undefined,
+    housesUrl: process.env['HOUSES_URL'] || undefined,
   }
 }

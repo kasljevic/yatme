@@ -3,12 +3,14 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { loadConfig, assetsDir, dataDir, distDir } from './config.ts'
 import { createMapRouter } from './routes/map.ts'
+import { createHousesRouter } from './routes/houses.ts'
 
 const config = loadConfig()
 const app = express()
 
 // API routes
 app.use('/api', createMapRouter(config))
+app.use('/api', createHousesRouter(config))
 
 // Serve client assets (appearances.dat, sprites, etc.)
 app.use(express.static(assetsDir))
@@ -33,4 +35,5 @@ app.get('*path', (_req, res) => {
 app.listen(config.port, () => {
   console.log(`Server listening on http://localhost:${config.port}`)
   console.log(`  Map dir: ${config.mapDir}`)
+  console.log(`  Houses:  ${config.housesUrl ?? 'not configured'}`)
 })
