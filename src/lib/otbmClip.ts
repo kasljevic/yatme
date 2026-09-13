@@ -1,31 +1,7 @@
 import type { OtbmMap } from './otbm.ts'
+import { inAnyRegion, type ClipRegion } from './clipRegion.ts'
 
-/**
- * An inclusive rectangular region of the map, optionally limited to a range of
- * floors. Coordinates are absolute map coordinates, never region-relative.
- */
-export interface ClipRegion {
-  minX: number
-  minY: number
-  maxX: number
-  maxY: number
-  /** Lowest floor index to keep. Omit for all floors. Remember: lower Z = higher elevation. */
-  minZ?: number
-  /** Highest floor index to keep. Omit for all floors. */
-  maxZ?: number
-}
-
-function containsPoint(region: ClipRegion, x: number, y: number, z: number): boolean {
-  if (x < region.minX || x > region.maxX) return false
-  if (y < region.minY || y > region.maxY) return false
-  if (region.minZ !== undefined && z < region.minZ) return false
-  if (region.maxZ !== undefined && z > region.maxZ) return false
-  return true
-}
-
-function inAnyRegion(regions: ClipRegion[], x: number, y: number, z: number): boolean {
-  return regions.some(r => containsPoint(r, x, y, z))
-}
+export type { ClipRegion } from './clipRegion.ts'
 
 /**
  * Returns a copy of `map` containing only the tiles, towns and waypoints that

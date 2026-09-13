@@ -19,9 +19,20 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { JSDOM } from 'jsdom'
 import { parseOtbm, serializeOtbm } from '../src/lib/otbm.ts'
 import { clipOtbm, type ClipRegion } from '../src/lib/otbmClip.ts'
 import { prefilterOtbmAreas } from '../src/lib/otbmPrefilter.ts'
+import { clipSidecars } from '../src/lib/sidecarClip.ts'
+import {
+  emptySidecars, parseHousesXml, parseSpawnsXml,
+  serializeHousesXml, serializeSpawnsXml, type MapSidecars,
+} from '../src/lib/sidecars.ts'
+
+// sidecars.ts parses with DOMParser because it normally runs in the browser.
+// Lending it a DOM here is what lets this script reuse it instead of growing a
+// second XML parser that could disagree with the editor's.
+globalThis.DOMParser = new JSDOM().window.DOMParser
 
 /** Named areas of the otservbr real-Tibia map, generous boxes around each city. */
 const PRESETS: Record<string, ClipRegion> = {
@@ -49,9 +60,17 @@ function parseRegion(spec: string): ClipRegion {
   return region
 }
 
-function parseArgs(argv: string[]): { input: string; output: string; regions: ClipRegion[] } {
+interface Args {
+  input: string
+  output: string
+  regions: ClipRegion[]
+  sidecarDir: string
+}
+
+function parseArgs(argv: string[]): Args {
   let input = ''
   let output = ''
+  let sidecarDir = ''
   const regions: ClipRegion[] = []
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -59,11 +78,37 @@ function parseArgs(argv: string[]): { input: string; output: string; regions: Cl
     if (arg === '--in' && next) { input = next; i++ }
     else if (arg === '--out' && next) { output = next; i++ }
     else if (arg === '--region' && next) { regions.push(parseRegion(next)); i++ }
+    else if (arg === '--sidecar-dir' && next) { sidecarDir = next; i++ }
     else throw new Error(`Unexpected argument "${arg}"`)
   }
   if (!input || !output) throw new Error('Both --in and --out are required')
   if (regions.length === 0) throw new Error('At least one --region is required')
-  return { input, output, regions }
+  return { input, output, regions, sidecarDir: sidecarDir || path.dirname(input) }
+}
+
+/**
+ * Reads the sidecars the map names, from `dir`. Missing files are skipped rather
+ * than fatal: a map may legitimately ship without spawns or NPCs.
+ */
+function readSidecars(dir: string, map: { houseFile: string; spawnFile: string; npcFile: string }): MapSidecars {
+  const sidecars = emptySidecars()
+  const read = (name: string): string | null => {
+    if (!name) return null
+    const full = path.join(dir, name)
+    if (!fs.existsSync(full)) {
+      console.log(`skip    ${name} (not found in ${dir})`)
+      return null
+    }
+    return fs.readFileSync(full, 'utf8')
+  }
+
+  const houseXml = read(map.houseFile)
+  if (houseXml) sidecars.houses = parseHousesXml(houseXml)
+  const spawnXml = read(map.spawnFile)
+  if (spawnXml) sidecars.monsterSpawns = parseSpawnsXml(spawnXml, 'monsters')
+  const npcXml = read(map.npcFile)
+  if (npcXml) sidecars.npcSpawns = parseSpawnsXml(npcXml, 'npcs')
+  return sidecars
 }
 
 function mib(bytes: number): string {
@@ -71,7 +116,7 @@ function mib(bytes: number): string {
 }
 
 async function main(): Promise<void> {
-  const { input, output, regions } = parseArgs(process.argv.slice(2))
+  const { input, output, regions, sidecarDir } = parseArgs(process.argv.slice(2))
 
   const raw = fs.readFileSync(input)
   console.log(`read    ${input} (${mib(raw.byteLength)})`)
@@ -95,10 +140,42 @@ async function main(): Promise<void> {
     throw new Error('Clip produced no tiles — check the region coordinates')
   }
 
+  // Sidecars are renamed to match the output map so the "<map>-house.xml"
+  // convention still holds, and the map's own references are updated to match.
+  const stem = path.basename(output).replace(/\.otbm$/i, '')
+  const sourceSidecars = readSidecars(sidecarDir, clipped)
+  const houseIds = new Set<number>()
+  for (const tile of clipped.tiles.values()) {
+    if (tile.houseId) houseIds.add(tile.houseId)
+  }
+  const clippedSidecars = clipSidecars(sourceSidecars, regions, { keepHouseIds: houseIds })
+  console.log(`sidecar ${clippedSidecars.houses.length}/${sourceSidecars.houses.length} houses, ` +
+    `${clippedSidecars.monsterSpawns.length}/${sourceSidecars.monsterSpawns.length} monster spawns, ` +
+    `${clippedSidecars.npcSpawns.length}/${sourceSidecars.npcSpawns.length} NPC spawns`)
+
+  if (clippedSidecars.houses.length > 0) clipped.houseFile = `${stem}-house.xml`
+  if (clippedSidecars.monsterSpawns.length > 0) clipped.spawnFile = `${stem}-monster.xml`
+  if (clippedSidecars.npcSpawns.length > 0) clipped.npcFile = `${stem}-npc.xml`
+
   const bytes = await serializeOtbm(clipped)
-  fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true })
+  const outDir = path.dirname(path.resolve(output))
+  fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(output, bytes)
   console.log(`wrote   ${output} (${mib(bytes.byteLength)})`)
+
+  const writeSidecar = (name: string, xml: string): void => {
+    fs.writeFileSync(path.join(outDir, name), xml)
+    console.log(`wrote   ${name} (${mib(Buffer.byteLength(xml))})`)
+  }
+  if (clippedSidecars.houses.length > 0) {
+    writeSidecar(clipped.houseFile, serializeHousesXml(clippedSidecars.houses))
+  }
+  if (clippedSidecars.monsterSpawns.length > 0) {
+    writeSidecar(clipped.spawnFile, serializeSpawnsXml(clippedSidecars.monsterSpawns, 'monsters'))
+  }
+  if (clippedSidecars.npcSpawns.length > 0) {
+    writeSidecar(clipped.npcFile, serializeSpawnsXml(clippedSidecars.npcSpawns, 'npcs'))
+  }
 }
 
 main().catch(err => {

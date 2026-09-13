@@ -1,4 +1,4 @@
-import type { ClipRegion } from './otbmClip.ts'
+import { anyBlockOverlaps, type ClipRegion } from './clipRegion.ts'
 
 const NODE_START = 0xfe
 const NODE_END = 0xff
@@ -34,14 +34,6 @@ function readUnescaped(raw: Uint8Array, offset: number, count: number): number[]
     i++
   }
   return out
-}
-
-function areaOverlaps(region: ClipRegion, baseX: number, baseY: number, baseZ: number): boolean {
-  if (baseX + AREA_SPAN - 1 < region.minX || baseX > region.maxX) return false
-  if (baseY + AREA_SPAN - 1 < region.minY || baseY > region.maxY) return false
-  if (region.minZ !== undefined && baseZ < region.minZ) return false
-  if (region.maxZ !== undefined && baseZ > region.maxZ) return false
-  return true
 }
 
 /**
@@ -90,7 +82,7 @@ export function prefilterOtbmAreas(raw: Uint8Array, regions: ClipRegion[]): Uint
         const [xLo, xHi, yLo, yHi, z] = readUnescaped(raw, i + 2, AREA_HEADER_BYTES)
         const baseX = xLo! | (xHi! << 8)
         const baseY = yLo! | (yHi! << 8)
-        if (!regions.some(r => areaOverlaps(r, baseX, baseY, z!))) {
+        if (!anyBlockOverlaps(regions, baseX, baseY, z!, AREA_SPAN)) {
           pendingStart = i
           pendingDepth = stack.length
         }

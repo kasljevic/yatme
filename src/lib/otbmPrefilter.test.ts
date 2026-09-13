@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createEmptyMap, parseOtbm, serializeOtbm, tileKey, type OtbmMap } from './otbm.ts'
 import { prefilterOtbmAreas } from './otbmPrefilter.ts'
-import type { ClipRegion } from './otbmClip.ts'
+import type { ClipRegion } from './clipRegion.ts'
 
 /**
  * Builds a real OTBM byte stream via the project's own serializer, so these
