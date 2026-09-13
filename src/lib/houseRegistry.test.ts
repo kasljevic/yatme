@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   decodeWikiCoord, normalizeLiveHouses, joinHouses, searchHouses, liveHousePosition,
   type LiveHouse,
+  findHouseTile,
+  resolveHouseTarget,
+  type EnrichedHouse,
 } from './houseRegistry.ts'
 import type { HouseData } from './sidecars.ts'
 
@@ -195,5 +198,54 @@ describe('searchHouses', () => {
 
   it('returns nothing when there is no match', () => {
     expect(searchHouses(joined, 'zzzz')).toEqual([])
+  })
+})
+
+describe('findHouseTile', () => {
+  it('returns the first tile the house owns', () => {
+    const tiles = [
+      { x: 100, y: 100, z: 7 },
+      { x: 32369, y: 32241, z: 7, houseId: 5 },
+    ]
+
+    expect(findHouseTile(tiles, 5)).toEqual({ x: 32369, y: 32241, z: 7 })
+  })
+
+  it('returns null when no tile belongs to the house', () => {
+    expect(findHouseTile([{ x: 1, y: 1, z: 7, houseId: 9 }], 5)).toBeNull()
+  })
+})
+
+describe('resolveHouseTarget', () => {
+  const house = (over: Partial<EnrichedHouse> = {}): EnrichedHouse => ({
+    id: 5, name: 'Castle of the Winds', entryX: 0, entryY: 0, entryZ: 7,
+    rent: 0, townId: 1, size: 10, clientId: 1234, guildhall: false, beds: 2,
+    live: null, ...over,
+  })
+
+  it('prefers a tile the house owns on the loaded map', () => {
+    const tiles = [{ x: 32657, y: 31583, z: 7, houseId: 5 }]
+
+    const target = resolveHouseTarget(tiles, house({ entryX: 1, entryY: 1 }))
+
+    expect(target).toEqual({ x: 32657, y: 31583, z: 7 })
+  })
+
+  it('falls back to the registry position when the map has no tiles for it', () => {
+    const live = { houseid: 1234, posX: '127.145', posY: '123.95', posZ: '7' } as LiveHouse
+
+    const target = resolveHouseTarget([], house({ live }))
+
+    expect(target).toEqual({ x: 32657, y: 31583, z: 7 })
+  })
+
+  it('falls back to the recorded entry when nothing else is known', () => {
+    const target = resolveHouseTarget([], house({ entryX: 32369, entryY: 32241, entryZ: 6 }))
+
+    expect(target).toEqual({ x: 32369, y: 32241, z: 6 })
+  })
+
+  it('returns null for a house that has never been placed', () => {
+    expect(resolveHouseTarget([], house())).toBeNull()
   })
 })

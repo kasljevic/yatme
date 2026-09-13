@@ -169,3 +169,52 @@ export function searchHouses(houses: EnrichedHouse[], query: string): EnrichedHo
     return haystack.some(field => field.toLowerCase().includes(needle))
   })
 }
+
+export interface MapPosition {
+  x: number
+  y: number
+  z: number
+}
+
+/** Just enough of a tile to locate a house on the map. */
+export interface HouseTileLike {
+  x: number
+  y: number
+  z: number
+  houseId?: number
+}
+
+/**
+ * Finds a tile the house owns, so the camera can fly to somewhere that actually
+ * exists in the loaded map.
+ */
+export function findHouseTile(tiles: Iterable<HouseTileLike>, houseId: number): MapPosition | null {
+  for (const tile of tiles) {
+    if (tile.houseId === houseId) return { x: tile.x, y: tile.y, z: tile.z }
+  }
+  return null
+}
+
+/**
+ * Picks where to send the camera for a house, most trustworthy source first.
+ *
+ * Owned tiles win because they are the map's own geometry. Failing that a
+ * registry position still points at the right neighbourhood — useful for a house
+ * whose tiles were clipped away — and the recorded entry is the last resort,
+ * since an unplaced house has one of 0,0.
+ */
+export function resolveHouseTarget(
+  tiles: Iterable<HouseTileLike>,
+  house: EnrichedHouse,
+): MapPosition | null {
+  const tile = findHouseTile(tiles, house.id)
+  if (tile) return tile
+
+  const livePosition = house.live ? liveHousePosition(house.live) : null
+  if (livePosition) return livePosition
+
+  if (house.entryX > 0 && house.entryY > 0) {
+    return { x: house.entryX, y: house.entryY, z: house.entryZ }
+  }
+  return null
+}

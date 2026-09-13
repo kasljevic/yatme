@@ -44,6 +44,8 @@ import { useToolAutoToggle } from './hooks/useToolAutoToggle'
 import { FloorSelector } from './components/FloorSelector'
 import { LoadingOverlay } from './components/LoadingOverlay'
 import { HudField } from './components/HudField'
+import { useLiveHouses } from './hooks/useLiveHouses'
+import { resolveHouseTarget } from './lib/houseRegistry'
 
 /** Maps boolean setting keys to their corresponding MapRenderer method calls. */
 const RENDERER_SYNC: Partial<Record<BooleanSettingKey, (r: MapRendererType, v: boolean) => void>> = {
@@ -262,6 +264,10 @@ function App() {
 
   // ── Auto-toggle overlay/palette when zone or house tool is active ───
   useToolAutoToggle(tools.activeTool, 'zone', 'showZoneOverlay', 'showZonePalette', editorSettings, updateSetting)
+  // Live house ownership from the launchpad registry. Optional decoration: the
+  // map carries the geometry, so an unreachable registry just means no badges.
+  const liveHouses = useLiveHouses()
+
   useToolAutoToggle(tools.activeTool, 'house', 'showHouseOverlay', 'showHousePalette', editorSettings, updateSetting)
   useToolAutoToggle(tools.activeTool, 'creature', 'showMonsterSpawns', 'showCreaturePalette', editorSettings, updateSetting)
   useToolAutoToggle(tools.activeTool, 'waypoint', 'showWaypointOverlay', 'showWaypointPalette', editorSettings, updateSetting)
@@ -688,16 +694,13 @@ function App() {
               tools.setSelectedHouse(null)
             }
           }}
-          onNavigateToHouse={(houseId) => {
-            if (!mapData) return
-            for (const tile of mapData.tiles.values()) {
-              if (tile.houseId === houseId) {
-                rendererRef.current?.setFloor(tile.z)
-                rendererRef.current?.centerOn(tile.x, tile.y)
-                rendererRef.current?.pingTile(tile.x, tile.y, tile.z)
-                break
-              }
-            }
+          liveHouses={liveHouses.houses}
+          onNavigateToHouse={(house) => {
+            const target = resolveHouseTarget(mapData?.tiles.values() ?? [], house)
+            if (!target) return
+            rendererRef.current?.setFloor(target.z)
+            rendererRef.current?.centerOn(target.x, target.y)
+            rendererRef.current?.pingTile(target.x, target.y, target.z)
           }}
           onSetHouseExit={(houseId) => {
             setPlacingHouseExit(houseId)
