@@ -46,6 +46,7 @@ import { LoadingOverlay } from './components/LoadingOverlay'
 import { HudField } from './components/HudField'
 import { useLiveHouses } from './hooks/useLiveHouses'
 import { resolveHouseTarget } from './lib/houseRegistry'
+import { parseHouseIdSearch, parsePositionSearch } from './lib/position'
 
 /** Maps boolean setting keys to their corresponding MapRenderer method calls. */
 const RENDERER_SYNC: Partial<Record<BooleanSettingKey, (r: MapRendererType, v: boolean) => void>> = {
@@ -114,6 +115,7 @@ function App() {
 
   const paletteRef = useRef<BrushPaletteHandle>(null)
   const editorSettingsRef = useRef(editorSettings)
+  const deepLinkHandledRef = useRef(false)
 
   const [editingItem, setEditingItem] = useState<{ x: number; y: number; z: number; index: number } | null>(null)
   const [editingCreature, setEditingCreature] = useState<{ x: number; y: number; z: number; creatureName: string; isNpc: boolean } | null>(null)
@@ -384,6 +386,21 @@ function App() {
     rendererRef.current?.centerOn(x, y)
     rendererRef.current?.pingTile(x, y, z)
   }, [rendererRef])
+
+  useEffect(() => {
+    if (!rendererReady || !mapData || deepLinkHandledRef.current) return
+    const position = parsePositionSearch(window.location.search)
+    if (!position) return
+    const houseId = parseHouseIdSearch(window.location.search)
+    const house = houseId === null
+      ? null
+      : sidecarsData.houses.find(candidate => candidate.clientId === houseId)
+    const target = house
+      ? resolveHouseTarget(mapData.tiles.values(), { ...house, live: null }) ?? position
+      : position
+    deepLinkHandledRef.current = true
+    handleGoToPosition(target.x, target.y, target.z)
+  }, [rendererReady, mapData, sidecarsData.houses, handleGoToPosition])
 
   // ── Keyboard Shortcuts ─────────────────────────────────────────────
   const { borderizeCurrentSelection, randomizeCurrentSelection } = useKeyboardShortcuts({
