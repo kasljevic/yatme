@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type RefObject, type Dispatch, type SetStateAction } from 'react'
 import { Application } from 'pixi.js'
 import { loadAssets } from '../lib/initPipeline'
 import { setupEditor } from '../lib/setupEditor'
@@ -70,6 +70,9 @@ export function useEditorInit(
   const mutatorRef = useRef<MapMutator | null>(null)
   const appRef = useRef<Application | null>(null)
   const storageRef = useRef<MapStorageProvider | null>(null)
+  // Starts true so the Save entry does not flash "Read-only" while the map
+  // loads; the provider settles it below, before anything can be saved.
+  const [canSaveToServer, setCanSaveToServer] = useState(true)
 
   const {
     setLoadingStatus,
@@ -110,6 +113,7 @@ export function useEditorInit(
         ? new StaticFileProvider(mapFile)
         : new ServerStorageProvider()
       storageRef.current = provider
+      setCanSaveToServer(provider.canSave)
 
       const result = await loadAssets(container!, {
         setStatus: setLoadingStatus,
@@ -298,5 +302,5 @@ export function useEditorInit(
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { rendererRef, mutatorRef, appRef, storageRef }
+  return { rendererRef, mutatorRef, appRef, storageRef, canSaveToServer }
 }

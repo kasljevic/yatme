@@ -2,7 +2,7 @@ import type { MapBundle, MapStorageProvider } from './MapStorageProvider'
 import { toArrayBuffer } from '../triggerDownload'
 
 export class ServerStorageProvider implements MapStorageProvider {
-  readonly canSave = true
+  readonly canSave: boolean
   private baseUrl: string
 
   // The trailing slash is load-bearing, not cosmetic. The portal proxies this
@@ -13,6 +13,16 @@ export class ServerStorageProvider implements MapStorageProvider {
   // base and a hand-passed one both build the same URLs.
   constructor(baseUrl = '/api/') {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
+    // Saving is allowed only when this app owns the origin it is served from.
+    // The portal mounts the same container under /c/<id>/page/ and rewrites the
+    // base, and that copy is a viewer: there is one map on one disk, shared by
+    // every visitor, so a save through it would overwrite the file everyone
+    // else is reading. Segment count is the test rather than a comparison
+    // against a path literal, because any literal here is itself something the
+    // portal's rewriter could one day rewrite -- which would fail open, the one
+    // direction this must never fail. The portal caps the body at 100 KB as the
+    // backstop; this is what keeps a doomed save from being offered at all.
+    this.canSave = this.baseUrl.split('/').filter(Boolean).length === 1
   }
 
   async loadMap(onProgress?: (fraction: number) => void): Promise<MapBundle> {

@@ -58,6 +58,7 @@ interface ToolbarProps {
   onDoorTypeChange: (type: number) => void
   onSave: () => void
   canSave: boolean
+  readOnly: boolean
   selectedZone: ZoneSelection | null
   onZoneSelect: (zone: ZoneSelection) => void
   onExportZones: () => void
@@ -161,6 +162,7 @@ export function Toolbar({
   onDoorTypeChange,
   onSave,
   canSave,
+  readOnly,
   selectedZone,
   onZoneSelect,
   onExportZones,
@@ -182,7 +184,10 @@ export function Toolbar({
     {
       title: 'File',
       items: [
-        { label: 'Save Map', shortcut: 'Ctrl+S', disabled: !canSave, onClick: onSave },
+        // The hint slot carries the reason: a greyed entry with no explanation
+        // reads as a bug, and this one is deliberate.
+        { label: 'Save Map', shortcut: readOnly ? 'Read-only' : 'Ctrl+S',
+          disabled: readOnly || !canSave, onClick: onSave },
         'separator',
         {
           label: 'Import/Export',

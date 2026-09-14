@@ -188,4 +188,25 @@ describe('ServerStorageProvider', () => {
       expect(globalThis.fetch).toHaveBeenCalledWith('/c/yatme/page/api/map')
     })
   })
+
+  // The public copy of the editor is a viewer. One map on one disk is shared by
+  // every visitor, so only the copy served straight from the container may
+  // write to it -- and "served straight from the container" is exactly the case
+  // where the portal has not rewritten the base out from under us.
+  describe('canSave', () => {
+    it('allows saving when served from the root', () => {
+      expect(new ServerStorageProvider().canSave).toBe(true)
+      expect(new ServerStorageProvider('/api/').canSave).toBe(true)
+      expect(new ServerStorageProvider('/api').canSave).toBe(true)
+    })
+
+    it('refuses saving when the portal has mounted it under a prefix', () => {
+      expect(new ServerStorageProvider('/c/yatme/page/api/').canSave).toBe(false)
+      expect(new ServerStorageProvider('/c/yatme/page/api').canSave).toBe(false)
+    })
+
+    it('fails closed on any unexpected mount point', () => {
+      expect(new ServerStorageProvider('/editor/api/').canSave).toBe(false)
+    })
+  })
 })

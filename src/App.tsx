@@ -139,7 +139,7 @@ function App() {
   })
 
   // ── Editor Init ────────────────────────────────────────────────────
-  const { rendererRef, mutatorRef, storageRef } = useEditorInit(containerRef, {
+  const { rendererRef, mutatorRef, storageRef, canSaveToServer } = useEditorInit(containerRef, {
     setLoadingStatus, setLoadingProgress, setLoading, setError,
     setAppearancesData, setItemRegistry, setMapInfo, setBrushRegistryState,
     setTilesets, setMapFilename, setMapData, setSidecarsData,
@@ -524,6 +524,7 @@ function App() {
           onDoorTypeChange={tools.setActiveDoorType}
           onSave={handleSave}
           canSave={!!mapData}
+          readOnly={!canSaveToServer}
           selectedZone={tools.selectedZone}
           onZoneSelect={(zone) => {
             tools.setSelectedZone(zone)
