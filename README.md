@@ -76,6 +76,23 @@ The editor is available at `http://localhost:8080`.
 
 On first startup, sprite sheets are automatically converted from `.bmp.lzma` to PNG. The `sprites-png` volume persists converted sprites across container restarts.
 
+### Position deep links
+
+Append integer `x`, `y`, and `z` query parameters to center the editor on a
+tile after the map loads:
+
+```text
+http://localhost:8080/?x=32377&y=32256&z=7
+```
+
+The target tile is briefly highlighted. Invalid or incomplete positions are
+ignored. An optional `house` parameter lets the editor prefer the matching
+house geometry from its OTBM sidecar, falling back to the supplied position:
+
+```text
+http://localhost:8080/?x=32377&y=32256&z=7&house=10301
+```
+
 ### Volumes
 
 | Mount | Description |
