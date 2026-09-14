@@ -5,8 +5,14 @@ export class ServerStorageProvider implements MapStorageProvider {
   readonly canSave = true
   private baseUrl: string
 
-  constructor(baseUrl = '/api') {
-    this.baseUrl = baseUrl
+  // The trailing slash is load-bearing, not cosmetic. The portal proxies this
+  // app under /c/yatme/page/ and rewrites the absolute references it finds in
+  // the bundle, but it only matches the prefixes the registry declared -- and
+  // it declares "/api/". A bare '/api' literal is invisible to it, so the map
+  // request escapes to the portal root and 404s. Normalise here so a rewritten
+  // base and a hand-passed one both build the same URLs.
+  constructor(baseUrl = '/api/') {
+    this.baseUrl = baseUrl.replace(/\/+$/, '')
   }
 
   async loadMap(onProgress?: (fraction: number) => void): Promise<MapBundle> {

@@ -167,4 +167,25 @@ describe('ServerStorageProvider', () => {
       })).rejects.toThrow('Failed to save map: 403')
     })
   })
+
+  // The portal serves this app in an iframe under /c/yatme/page/ and rewrites
+  // the absolute references it finds in the bundle. Its rewriter only matches
+  // the declared prefix "/api/" -- slash included -- so the default base has to
+  // ship with that trailing slash to be seen at all, which means every base
+  // this class receives may or may not end in one. See portal/pagerewrite.py.
+  describe('base URL normalisation', () => {
+    it('does not double the slash when the base already ends in one', async () => {
+      const data = new Uint8Array([1, 2, 3])
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: new Headers(),
+        arrayBuffer: vi.fn().mockResolvedValue(data.buffer),
+      }) as unknown as typeof globalThis.fetch
+
+      const provider = new ServerStorageProvider('/c/yatme/page/api/')
+      await provider.loadMap()
+
+      expect(globalThis.fetch).toHaveBeenCalledWith('/c/yatme/page/api/map')
+    })
+  })
 })
