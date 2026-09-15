@@ -10,6 +10,7 @@ import { GridOverlay } from './GridOverlay'
 import { ClientBoxOverlay } from './ClientBoxOverlay'
 import { SpawnOverlay } from './creatures/SpawnOverlay'
 import { WaypointOverlay } from './WaypointOverlay'
+import { RouteOverlay } from './RouteOverlay.ts'
 import { WaypointManager } from './WaypointManager'
 import { SpawnManager } from './creatures/SpawnManager'
 import { FloorManager } from './FloorManager'
@@ -25,6 +26,7 @@ import type { CopyBuffer } from './CopyBuffer'
 import { CreatureSpriteResolver } from './creatures/CreatureSpriteResolver'
 import type { CreatureDatabase } from './creatures/CreatureDatabase'
 import type { ZoneSelection } from '../hooks/tools/types'
+import type { QuestRoutePoint } from './questProtocol.ts'
 import Stats from 'stats.js'
 
 export { type FloorViewMode } from './constants'
@@ -49,6 +51,7 @@ export class MapRenderer implements InputHost {
   private gridOverlay: GridOverlay
   private clientBoxOverlay: ClientBoxOverlay
   private waypointOverlay: WaypointOverlay
+  private routeOverlay: RouteOverlay
   private _waypointManager: WaypointManager
   private floorManager: FloorManager
   private chunkManager: ChunkManager
@@ -100,6 +103,7 @@ export class MapRenderer implements InputHost {
     this.gridOverlay = new GridOverlay()
     this.clientBoxOverlay = new ClientBoxOverlay()
     this.waypointOverlay = new WaypointOverlay()
+    this.routeOverlay = new RouteOverlay()
     this._waypointManager = waypointManager ?? new WaypointManager([])
 
     // Spawn overlays
@@ -154,6 +158,9 @@ export class MapRenderer implements InputHost {
     this.lightEngine = new LightEngine()
     this.mapContainer.addChild(this.lightEngine.container)
 
+    // Route overlay (quest viewer only — hidden by default, on top of everything else)
+    this.mapContainer.addChild(this.routeOverlay.container)
+
     // Floor manager
     this.floorManager = new FloorManager(
       this.mapContainer,
@@ -167,6 +174,7 @@ export class MapRenderer implements InputHost {
       this.selection.container,
       this.clientBoxOverlay.container,
       this.lightEngine.container,
+      this.routeOverlay.container,
     )
 
     // Minimap overlay (added to app.stage, not mapContainer — stays fixed on screen)
@@ -253,6 +261,7 @@ export class MapRenderer implements InputHost {
     this.monsterSpawnOverlay.markDirty()
     this.npcSpawnOverlay.markDirty()
     this.waypointOverlay.markDirty()
+    this.routeOverlay.markDirty()
     this.notifyCamera()
   }
 
@@ -422,6 +431,22 @@ export class MapRenderer implements InputHost {
 
   clearWaypointDragGhost(): void {
     this.waypointOverlay.clearDragGhost()
+  }
+
+  // ── Route overlay (quest viewer) ────────────────────────────────
+
+  get showRouteOverlay(): boolean { return this.routeOverlay.visible }
+
+  setShowRouteOverlay(enabled: boolean): void {
+    this.routeOverlay.setVisible(enabled)
+  }
+
+  setRoutePoints(points: QuestRoutePoint[]): void {
+    this.routeOverlay.setPoints(points)
+  }
+
+  setActiveRoutePoint(pointId: string | null): void {
+    this.routeOverlay.setActivePoint(pointId)
   }
 
   setSpawnDragGhost(spawnType: 'monster' | 'npc', x: number, y: number, z: number, radius: number): void {
@@ -704,6 +729,9 @@ export class MapRenderer implements InputHost {
     this.waypointOverlay.updateContainerOffset(this.camera.getFloorOffset(this.camera.floor))
     this.waypointOverlay.rebuild(this.camera.floor, this._waypointManager, this.camera)
 
+    this.routeOverlay.updateContainerOffset(this.camera.getFloorOffset(this.camera.floor))
+    this.routeOverlay.rebuild(this.camera.floor, this.camera)
+
     const clientBoxOffset = this.camera.getFloorOffset(this.camera.floor)
     this.clientBoxOverlay.updateContainerOffset(clientBoxOffset)
     this.clientBoxOverlay.update(this.camera, clientBoxOffset, this.app.screen.width, this.app.screen.height)
@@ -731,6 +759,7 @@ export class MapRenderer implements InputHost {
     this.minimap.destroy()
     this.lightEngine.destroy()
     this.waypointOverlay.destroy()
+    this.routeOverlay.destroy()
     this.npcSpawnOverlay.destroy()
     this.monsterSpawnOverlay.destroy()
     this.houseOverlay.destroy()

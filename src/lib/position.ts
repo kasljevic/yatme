@@ -20,6 +20,17 @@ export interface MapPosition {
   z: number
 }
 
+/**
+ * True when x/y/z fall within the OTBM world bounds (x/y: 0-65535, z: 0-15).
+ * Shared by the local deep-link parser below and by the quest viewer's
+ * postMessage validation, so both entry points enforce the same bounds.
+ */
+export function isValidWorldPosition(x: unknown, y: unknown, z: unknown): boolean {
+  return typeof x === 'number' && typeof y === 'number' && typeof z === 'number'
+    && Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(z)
+    && x >= 0 && x <= 65535 && y >= 0 && y <= 65535 && z >= 0 && z <= 15
+}
+
 /** Read a validated world position from a URL query string. */
 export function parsePositionSearch(search: string): MapPosition | null {
   const params = new URLSearchParams(search)
@@ -28,8 +39,7 @@ export function parsePositionSearch(search: string): MapPosition | null {
     return value !== null && /^\d+$/.test(value) ? Number(value) : NaN
   })
   const [x, y, z] = values
-  if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(z)
-      || x < 0 || x > 65535 || y < 0 || y > 65535 || z < 0 || z > 15) {
+  if (!isValidWorldPosition(x, y, z)) {
     return null
   }
   return { x, y, z }

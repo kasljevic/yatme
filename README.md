@@ -108,6 +108,170 @@ http://localhost:8080/?x=32377&y=32256&z=7&house=10301
 | `PORT`   | `8080`  | Host port   |
 | `UID`    | `1000`  | Container user ID |
 | `GID`    | `1000`  | Container group ID |
+| `READ_ONLY` | `false` | When truthy (`1`/`true`/`yes`/`on`), every write (`POST`) route for map and sidecar data is refused server-side, regardless of caller. Use for deployments that only ever serve the read-only quest viewer. See [Quest Viewer](#quest-viewer-read-only-embedding). |
+| `QUEST_MAP_DIR` | `<MAP_DIR>/quests` | Directory allowlisted for quest map lookups (see [Quest Viewer](#quest-viewer-read-only-embedding)). The legacy name `QUESTS_DIR` is still honoured if `QUEST_MAP_DIR` is unset. |
+| `VIEWER_ALLOWED_ORIGINS` | *(empty — same-origin only)* | Comma-separated allowlist of origins permitted to send `postMessage` commands to an embedded quest viewer. Served to the client at runtime via `GET /api/quest-config` (see [Quest Viewer](#quest-viewer-read-only-embedding)). |
+
+---
+
+## Quest Viewer (read-only embedding)
+
+In addition to the writable local editor, YATME can serve a **read-only quest
+viewer**: a minimal, non-editing map view intended to be embedded (e.g. in an
+iframe on a quest guide page) that shows one quest's map and an optional route
+overlay, driven entirely by `postMessage` commands from the embedding page.
+
+Existing editor behavior — the writable local editor and the `x`/`y`/`z`/
+`house` deep links described above — is unchanged; the quest viewer is a
+separate mode that must be explicitly selected via URL.
+
+### Selecting the viewer
+
+The viewer mode is selected purely by URL query parameters. Any URL that does
+not explicitly ask for the quest viewer continues to load the normal writable
+editor:
+
+```text
+http://localhost:8080/?viewer=quest&quest=thais-quest
+http://localhost:8080/?viewer=quest&quest=thais-quest&x=32377&y=32256&z=7
+```
+
+- `viewer=quest` — required, exact match, to opt into the quest viewer.
+- `quest=<slug>` — required; must match `^[a-z0-9]+(?:-[a-z0-9]+)*$` and be
+  at most 100 characters. An unknown `viewer` value, a missing/invalid
+  `quest` slug, or a slug the server has no map for all fall back to (or
+  error out of) something other than a silently-broken editor — they never
+  fall through to a writable view.
+- `x` / `y` / `z` — optional; once the quest map finishes loading, the same
+  bounds-checked deep-link parser used by the writable editor
+  (`x`/`y`: 0–65535, `z`: 0–15, all integers) centers the camera and floor on
+  that tile and pings it, exactly like the existing editor deep links.
+
+### Quest map directory layout
+
+Quest maps live under the server's allowlisted `QUEST_MAP_DIR` (default
+`<MAP_DIR>/quests`; the legacy name `QUESTS_DIR` still works if `QUEST_MAP_DIR`
+is unset). Each quest is **exactly one file** selected by its
+validated slug — never an arbitrary path supplied by a caller:
+
+```
+maps/quests/
+├── thais-quest.otbm
+├── thais-quest-house.xml       # optional sidecars, same "<slug>-<kind>.xml" naming
+├── thais-quest-zones.xml
+└── other-quest.otbm
+```
+
+The server resolves `<questsDir>/<slug>.otbm` and `<questsDir>/<slug>-<kind>.xml`
+only after validating the slug against the same pattern as above, rejecting
+anything containing path separators, `..`, or characters outside
+`[a-z0-9-]`, and rejecting any resolved path that would escape `questsDir`
+(defense in depth beyond the slug pattern itself). One iframe/tab loads
+exactly one quest map.
+
+### Read-only enforcement
+
+Read-only is enforced **server-side**, not just hidden in the UI:
+
+- `POST /api/quests/:slug/map` and `POST /api/quests/:slug/map/sidecars/:name`
+  always reject with `403 { error: "Quest maps are read-only" }` — quest maps
+  have no writer, independent of any other configuration.
+- When the server is started with `READ_ONLY=true`, the existing single-map
+  `POST /api/map` and `POST /api/map/sidecars/:name` routes reject the same
+  way, so a quest-only deployment can't be written to even through the
+  legacy editor routes. `READ_ONLY=false` (default) preserves today's
+  writable-editor behavior exactly.
+
+### `postMessage` protocol
+
+The embedding parent page and the quest viewer iframe communicate with a
+small, strictly-validated `postMessage` protocol (`src/lib/questProtocol.ts`).
+Every message carries a `version` (currently `1`) and a `quest` slug; both
+must match exactly or the message is dropped. Coordinates are bounds-checked
+the same way as the `x`/`y`/`z` deep link (`x`/`y`: 0–65535, `z`: 0–15,
+integers only).
+
+**Viewer → parent** (posted to `window.parent` and `window.opener`, if present,
+once the map has finished loading):
+
+```jsonc
+{ "type": "yatme:ready", "version": 1, "quest": "thais-quest" }
+```
+
+**Parent → viewer** — navigate the camera to a single verified point:
+
+```jsonc
+{
+  "type": "yatme:navigate",
+  "version": 1,
+  "quest": "thais-quest",
+  "stepId": "step-2",
+  "pointId": "pt-2",
+  "x": 32377, "y": 32256, "z": 7
+}
+```
+
+`stepId` and `pointId` identify the route step/point this navigation
+corresponds to; if `pointId` matches a point from the last `yatme:set-route`
+message, that point is highlighted as the active point.
+
+**Parent → viewer** — set (or replace) the displayed route, an ordered list of
+points (max 500, in display order — no separate ordinal field) rendered as
+connected, labeled markers:
+
+```jsonc
+{
+  "type": "yatme:set-route",
+  "version": 1,
+  "quest": "thais-quest",
+  "points": [
+    { "id": "pt-1", "stepId": "step-1", "missionId": "mission-1", "x": 32377, "y": 32256, "z": 7, "label": "Start", "confidence": 0.95 },
+    { "id": "pt-2", "stepId": "step-2", "missionId": "mission-1", "x": 32380, "y": 32256, "z": 7 }
+  ]
+}
+```
+
+Each route point requires `id`, `stepId`, `missionId`, `x`, `y`, `z`; `label`
+(string) and `confidence` (number, `0`–`1`) are optional. Setting a new route
+clears any previously active point — send a follow-up `yatme:navigate` with
+the matching `pointId` to (re-)highlight one.
+
+A message is accepted only if **all** of the following hold; otherwise it is
+silently dropped:
+
+1. **Origin allowlist** — the sender's `event.origin` is in the viewer's
+   allowlist. The allowlist is **not** baked in at build time: the client
+   fetches it at startup from `GET /api/quest-config` (server-side runtime
+   endpoint, see below), so a single prebuilt image can be reconfigured
+   per-deployment purely via the `VIEWER_ALLOWED_ORIGINS` env var. If unset
+   (or while the fetch is still pending), only the viewer's own origin is
+   trusted (fail-closed default) and no inbound messages are processed.
+2. **Protocol version** — `version` matches exactly (`1`).
+3. **Quest match** — `quest` matches the viewer's own quest slug (from the URL).
+4. **Schema** — the message shape, coordinate bounds, id/label lengths,
+   confidence bounds, and route length all validate (see
+   `parseQuestInboundMessage` for the exact rules).
+
+#### `GET /api/quest-config`
+
+Returns the server's runtime viewer-origin allowlist as JSON, so the client
+can validate incoming `postMessage` senders without any build-time
+configuration:
+
+```jsonc
+{ "allowedOrigins": ["https://quests.example.com"] }
+```
+
+Route points and the active point are rendered with Pixi overlays
+(`src/lib/RouteOverlay.ts`): ordered markers, connectors between consecutive
+same-floor points (based on their position in the `points` array), and
+per-point labels (falling back to `stepId` when `label` is omitted), filtered
+to the map's current floor.
+
+The viewer UI itself is minimal and read-only — no save/edit controls are
+rendered in quest mode — while the underlying `MapRenderer`/camera and the
+existing editor code paths are otherwise unchanged and unaffected when the
+viewer is not selected.
 
 ### Alternative: `docker run`
 

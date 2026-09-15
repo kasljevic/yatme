@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { ServerConfig } from '../config.ts'
 import { findOtbmFile, discoverSidecars } from '../lib/mapDir.ts'
-import { isPortalOriginated, READ_ONLY_THROUGH_PORTAL } from '../lib/portalOrigin.ts'
+import { rejectWrite } from '../lib/writeGuard.ts'
 
 function sanitizeFilename(name: string): string {
   return path.basename(name).replace(/[^\w.-]/g, '_')
@@ -85,14 +85,16 @@ export function createMapRouter(config: ServerConfig): Router {
   router.post('/map',
     express.raw({ type: 'application/octet-stream', limit: '200mb' }),
     (req, res) => {
-      // Refused for anyone who arrived through the public portal. The portal
-      // already declines the verb, so reaching this line means that layer was
-      // bypassed or removed; there is one map file on one disk and every
-      // visitor is reading it, so the machine holding the bytes gets the last
-      // word. A LAN request carries no X-Portal-Auth, so editing at
-      // localhost:8004 is untouched.
-      if (isPortalOriginated(req.headers)) {
-        res.status(403).json(READ_ONLY_THROUGH_PORTAL)
+      // Refused when the server is configured read-only, or for anyone who
+      // arrived through the public portal. The portal already declines the
+      // verb, so reaching this line means that layer was bypassed or removed;
+      // there is one map file on one disk and every visitor is reading it, so
+      // the machine holding the bytes gets the last word. A LAN request
+      // carries no X-Portal-Auth, so editing at localhost:8004 is untouched
+      // unless READ_ONLY is explicitly set.
+      const rejection = rejectWrite(config, req.headers)
+      if (rejection) {
+        res.status(rejection.status).json(rejection.body)
         return
       }
 
@@ -133,14 +135,16 @@ export function createMapRouter(config: ServerConfig): Router {
   router.post('/map/sidecars/:name',
     express.raw({ type: 'application/octet-stream', limit: '50mb' }),
     (req, res) => {
-      // Refused for anyone who arrived through the public portal. The portal
-      // already declines the verb, so reaching this line means that layer was
-      // bypassed or removed; there is one map file on one disk and every
-      // visitor is reading it, so the machine holding the bytes gets the last
-      // word. A LAN request carries no X-Portal-Auth, so editing at
-      // localhost:8004 is untouched.
-      if (isPortalOriginated(req.headers)) {
-        res.status(403).json(READ_ONLY_THROUGH_PORTAL)
+      // Refused when the server is configured read-only, or for anyone who
+      // arrived through the public portal. The portal already declines the
+      // verb, so reaching this line means that layer was bypassed or removed;
+      // there is one map file on one disk and every visitor is reading it, so
+      // the machine holding the bytes gets the last word. A LAN request
+      // carries no X-Portal-Auth, so editing at localhost:8004 is untouched
+      // unless READ_ONLY is explicitly set.
+      const rejection = rejectWrite(config, req.headers)
+      if (rejection) {
+        res.status(rejection.status).json(rejection.body)
         return
       }
 
